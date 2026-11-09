@@ -1,0 +1,15 @@
+[package]
+name = "ml-lab-leptos"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+leptos = { version = "=0.8.22", features = ["csr"] }
+console_error_panic_hook = "0.1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"

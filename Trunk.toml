@@ -1,0 +1,5 @@
+[build]
+target = "index.html"
+
+[tools]
+wasm_bindgen = "0.2.130"
