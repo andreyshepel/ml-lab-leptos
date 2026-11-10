@@ -206,6 +206,13 @@ fn ridge(mut rows: Vec<Vec<f64>>, points: &[Point], lambda: f64, skip: usize) ->
 }
 
 impl Fit {
+    /// Обучает модель на переданных точках или инициализирует веса нейросети.
+    /// Для периодического режима точки должны быть заранее свёрнуты по фазе.
+    ///
+    /// # Ошибки
+    ///
+    /// Возвращает сообщение при некорректных данных, числовых настройках
+    /// или если не удалось решить систему для коэффициентов.
     pub fn train(
         points: &[Point],
         parameters: Parameters,
@@ -219,6 +226,9 @@ impl Fit {
         let hi = points.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
         let model = match parameters {
             Parameters::Polynomial { degree, lambda } => {
+                if !lambda.is_finite() || lambda < 0.0 {
+                    return Err("Регуляризация полинома должна быть конечной и неотрицательной.");
+                }
                 let count = degree.min(points.len() - 1).min(23) + 1;
                 let center = (lo + hi) / 2.0;
                 let scale = if hi > lo { (hi - lo) / 2.0 } else { 1.0 };
@@ -260,6 +270,12 @@ impl Fit {
                 width,
                 lambda,
             } => {
+                if !width.is_finite() || width <= 0.0 {
+                    return Err("Ширина RBF должна быть конечной и положительной.");
+                }
+                if !lambda.is_finite() || lambda < 0.0 {
+                    return Err("Регуляризация RBF должна быть конечной и неотрицательной.");
+                }
                 let centers: Vec<_> = crate::data::grid(lo, hi, centers.clamp(2, 48)).collect();
                 let rows = points
                     .iter()
@@ -279,15 +295,29 @@ impl Fit {
                 relu,
                 rate,
                 lambda,
-            } => Model::Neural(Network::new(
-                depth.clamp(1, 4),
-                hidden.clamp(2, 64),
-                relu,
-                rate,
-                lambda,
-                seed,
-            )),
+            } => {
+                if !rate.is_finite() || rate <= 0.0 {
+                    return Err("Скорость обучения должна быть конечной и положительной.");
+                }
+                if !lambda.is_finite() || lambda < 0.0 {
+                    return Err("Регуляризация сети должна быть конечной и неотрицательной.");
+                }
+                Model::Neural(Network::new(
+                    depth.clamp(1, 4),
+                    hidden.clamp(2, 64),
+                    relu,
+                    rate,
+                    lambda,
+                    seed,
+                ))
+            }
             Parameters::Gp { length, noise } => {
+                if !length.is_finite() || length <= 0.0 {
+                    return Err("Масштаб связи должен быть конечным и положительным.");
+                }
+                if !noise.is_finite() || noise < 0.0 {
+                    return Err("Предполагаемый шум должен быть конечным и неотрицательным.");
+                }
                 let centers: Vec<_> = points.iter().map(|p| p.x).collect();
                 let matrix = centers
                     .iter()
@@ -308,6 +338,9 @@ impl Fit {
                 let mut coefficients: Vec<_> = points.iter().map(|p| p.y).collect();
                 forward(&lower, &mut coefficients);
                 backward(&lower, &mut coefficients);
+                if !coefficients.iter().all(|value| value.is_finite()) {
+                    return Err("Коэффициенты гауссовского процесса вышли за числовой диапазон.");
+                }
                 Model::Gp {
                     centers,
                     coefficients,

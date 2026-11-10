@@ -1,5 +1,7 @@
+mod clustering;
 mod controls;
 mod plots;
+mod reinforcement;
 use ml_lab_leptos::lab as state;
 mod structure;
 
@@ -61,6 +63,22 @@ pub fn num(x: f64) -> String {
 
 #[component]
 pub fn App() -> impl IntoView {
+    let experiment = RwSignal::new(0);
+    view! {
+        <nav class="experiment-nav" aria-label="Эксперимент">
+            {["Регрессия", "Кластеризация", "Обучение с подкреплением"].into_iter().enumerate().map(|(i, name)|view! {
+                <button aria-pressed=move || (experiment.get()==i).to_string()
+                    on:click=move |_|experiment.set(i)>{name}</button>
+            }).collect_view()}
+        </nav>
+        <div hidden=move || experiment.get()!=0><Regression/></div>
+        <div hidden=move || experiment.get()!=1><clustering::Clustering/></div>
+        <div hidden=move || experiment.get()!=2><reinforcement::Reinforcement/></div>
+    }
+}
+
+#[component]
+fn Regression() -> impl IntoView {
     let lab = RwSignal::new(Lab::new());
     let selected = RwSignal::new(Method::Polynomial);
     let active = Memo::new(move |_| selected.get());

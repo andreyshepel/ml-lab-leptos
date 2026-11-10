@@ -183,3 +183,38 @@ fn marking_preserves_enough_phases_for_a_later_periodic_fit() {
     assert!(lab.training.len() >= 2);
     assert!(lab.models.iter().all(Result::is_ok));
 }
+
+#[test]
+fn invalid_numeric_settings_are_rejected_before_fitting() {
+    let data = Dataset::generate(DataConfig::default());
+    let invalid = [
+        Parameters::Polynomial {
+            degree: 4,
+            lambda: f64::NAN,
+        },
+        Parameters::Rbf {
+            centers: 8,
+            width: 0.0,
+            lambda: 0.001,
+        },
+        Parameters::Rbf {
+            centers: 8,
+            width: 0.5,
+            lambda: -0.001,
+        },
+        Parameters::Neural {
+            depth: 1,
+            hidden: 32,
+            relu: false,
+            rate: f64::INFINITY,
+            lambda: 0.001,
+        },
+        Parameters::Gp {
+            length: 0.5,
+            noise: -0.1,
+        },
+    ];
+    for parameters in invalid {
+        assert!(Fit::train(&data.train, parameters, false, 72).is_err());
+    }
+}

@@ -12,3 +12,20 @@
 .method-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .neural-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
 nav button { overflow-wrap: anywhere; }
+.experiment-nav { display: flex; flex-wrap: wrap; }
+.cluster-panel { max-width: 1000px; }
+.cluster-panel .neural-actions { align-items: flex-end; }
+.cluster-count { margin: 0; min-width: 155px; }
+.cluster-count select { display: block; margin-top: 5px; }
+.cluster-panel svg { margin-bottom: 12px; }
+.rl-panel { max-width: 1050px; }
+.rl-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(220px, 1fr); gap: 24px; }
+.rl-status { font-variant-numeric: tabular-nums; }
+.rl-panel .cluster-count { display: block; margin-bottom: 12px; }
+@media (max-width: 700px) { .rl-layout { grid-template-columns: 1fr; } }
+.rl-inspector { margin-top: 24px; }
+.rl-cell { cursor: pointer; }
+.rl-cell:hover, .rl-cell:focus-visible { stroke: #edf3fa; stroke-width: 3px; }
+.rl-q-table { max-height: 330px; }
+.rl-q-table thead { position: sticky; top: 0; background: #172235; z-index: 1; }
+.rl-network { max-width: 780px; }
