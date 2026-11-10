@@ -1,24 +1,26 @@
-use super::{ACTIONS, GAMMA, Random, STATES, Transition};
+use super::{ACTIONS, GAMMA, GOAL_COUNT, Random, STATES, State, Transition};
 
 /// Параметры и активации онлайн-сети для одной выбранной клетки.
 pub struct NetworkView {
-    pub activation: [f64; HIDDEN],
-    pub input_weights: [f64; HIDDEN],
+    pub first: [f64; HIDDEN],
+    pub second: [f64; HIDDEN],
     pub output_weights: [[f64; HIDDEN]; ACTIONS],
     pub output_bias: [f64; ACTIONS],
     pub replay_size: usize,
     pub updates: usize,
 }
 
-const HIDDEN: usize = 24;
+const HIDDEN: usize = 64;
 const REPLAY: usize = 512;
 const BATCH: usize = 16;
 const TARGET_INTERVAL: usize = 64;
 
-// При one-hot входе предактивации скрытого слоя равны весам активной клетки.
+// Скрытый слой суммирует веса активной клетки и флагов собранных наград.
 #[derive(Clone)]
 struct Network {
-    input: [[f64; HIDDEN]; STATES],
+    input: [[f64; HIDDEN]; STATES + GOAL_COUNT],
+    hidden: [[f64; HIDDEN]; HIDDEN],
+    hidden_bias: [f64; HIDDEN],
     output: [[f64; HIDDEN]; ACTIONS],
     bias: [f64; ACTIONS],
 }
@@ -27,20 +29,42 @@ impl Network {
     fn new(rng: &mut Random) -> Self {
         Self {
             input: std::array::from_fn(|_| std::array::from_fn(|_| 0.8 * rng.sample() - 0.4)),
+            hidden: std::array::from_fn(|_| {
+                std::array::from_fn(|_| (2.0 * rng.sample() - 1.0) * (6.0 / HIDDEN as f64).sqrt())
+            }),
+            hidden_bias: [0.0; HIDDEN],
             output: std::array::from_fn(|_| std::array::from_fn(|_| 0.24 * rng.sample() - 0.12)),
             bias: [0.0; ACTIONS],
         }
     }
 
-    fn values(&self, state: usize) -> [f64; ACTIONS] {
-        std::array::from_fn(|a| {
-            self.bias[a]
-                + self.input[state]
-                    .iter()
-                    .zip(self.output[a])
-                    .map(|(&z, w)| z.max(0.0) * w)
-                    .sum::<f64>()
-        })
+    fn inputs(&self, state: State) -> [f64; HIDDEN] {
+        let mut input = self.input[state.cell];
+        for goal in 0..GOAL_COUNT {
+            if state.collected.0 & (1 << goal) != 0 {
+                for (sum, weight) in input.iter_mut().zip(self.input[STATES + goal]) {
+                    *sum += weight;
+                }
+            }
+        }
+        input
+    }
+
+    fn activations(&self, state: State) -> ([f64; HIDDEN], [f64; HIDDEN]) {
+        let first = self.inputs(state).map(|value| value.max(0.0));
+        let second = std::array::from_fn(|i| {
+            (self.hidden_bias[i] + crate::numerics::dot(&first, &self.hidden[i])).max(0.0)
+        });
+        (first, second)
+    }
+
+    fn values(&self, state: State) -> [f64; ACTIONS] {
+        let (_, second) = self.activations(state);
+        std::array::from_fn(|a| self.value(&second, a))
+    }
+
+    fn value(&self, second: &[f64; HIDDEN], action: usize) -> f64 {
+        self.bias[action] + crate::numerics::dot(second, &self.output[action])
     }
 }
 
@@ -64,15 +88,15 @@ impl DeepQ {
         }
     }
 
-    pub(super) fn values(&self, state: usize) -> [f64; ACTIONS] {
+    pub(super) fn values(&self, state: State) -> [f64; ACTIONS] {
         self.online.values(state)
     }
 
-    pub(super) fn view(&self, state: usize) -> NetworkView {
-        let input_weights = self.online.input[state];
+    pub(super) fn view(&self, state: State) -> NetworkView {
+        let (first, second) = self.online.activations(state);
         NetworkView {
-            activation: input_weights.map(|z| z.max(0.0)),
-            input_weights,
+            first,
+            second,
             output_weights: self.online.output,
             output_bias: self.online.bias,
             replay_size: self.replay.len(),
@@ -91,7 +115,9 @@ impl DeepQ {
             return;
         }
         let mut grad = Network {
-            input: [[0.0; HIDDEN]; STATES],
+            input: [[0.0; HIDDEN]; STATES + GOAL_COUNT],
+            hidden: [[0.0; HIDDEN]; HIDDEN],
+            hidden_bias: [0.0; HIDDEN],
             output: [[0.0; HIDDEN]; ACTIONS],
             bias: [0.0; ACTIONS],
         };
@@ -105,14 +131,30 @@ impl DeepQ {
                     .into_iter()
                     .fold(f64::NEG_INFINITY, f64::max)
             };
+            let (first, second) = self.online.activations(t.from);
             let error =
-                (t.reward + GAMMA * future - self.online.values(t.from)[t.action]).clamp(-1.0, 1.0);
+                (t.reward + GAMMA * future - self.online.value(&second, t.action)).clamp(-1.0, 1.0);
             grad.bias[t.action] += error;
-            for h in 0..HIDDEN {
-                let z = self.online.input[t.from][h];
-                if z > 0.0 {
-                    grad.output[t.action][h] += error * z;
-                    grad.input[t.from][h] += error * self.online.output[t.action][h];
+            let mut first_delta = [0.0; HIDDEN];
+            for (h, activation) in second.into_iter().enumerate() {
+                if activation > 0.0 {
+                    grad.output[t.action][h] += error * activation;
+                    let delta = error * self.online.output[t.action][h];
+                    grad.hidden_bias[h] += delta;
+                    for (i, &input) in first.iter().enumerate() {
+                        grad.hidden[h][i] += delta * input;
+                        first_delta[i] += delta * self.online.hidden[h][i];
+                    }
+                }
+            }
+            for (i, delta) in first_delta.into_iter().enumerate() {
+                if first[i] > 0.0 {
+                    grad.input[t.from.cell][i] += delta;
+                    for goal in 0..GOAL_COUNT {
+                        if t.from.collected.0 & (1 << goal) != 0 {
+                            grad.input[STATES + goal][i] += delta;
+                        }
+                    }
                 }
             }
         }
@@ -122,18 +164,25 @@ impl DeepQ {
             .input
             .iter_mut()
             .zip(grad.input)
+            .chain(self.online.hidden.iter_mut().zip(grad.hidden))
             .chain(self.online.output.iter_mut().zip(grad.output))
         {
             for (w, delta) in weights.iter_mut().zip(deltas) {
                 *w += rate * delta;
             }
         }
-        for (w, delta) in self.online.bias.iter_mut().zip(grad.bias) {
+        for (w, delta) in self
+            .online
+            .bias
+            .iter_mut()
+            .zip(grad.bias)
+            .chain(self.online.hidden_bias.iter_mut().zip(grad.hidden_bias))
+        {
             *w += rate * delta;
         }
         self.updates += 1;
         if self.updates.is_multiple_of(TARGET_INTERVAL) {
-            self.target = self.online.clone();
+            self.target.clone_from(&self.online);
         }
     }
 }

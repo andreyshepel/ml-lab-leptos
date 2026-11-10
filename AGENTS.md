@@ -37,6 +37,7 @@ A Rust/Leptos port of the regression lab, with additional clustering and reinfor
 - `src/numerics.rs` — numerical methods; `src/lab.rs` — regression experiment state.
 - `src/clustering.rs` — k-means, single-link, and DBSCAN.
 - `src/reinforcement.rs` — Q-learning, SARSA, and DQN on a shared grid.
+- `src/reinforcement/cartpole.rs` and `src/reinforcement/cartpole/` — continuing CartPole dynamics and online DQN training.
 - `src/ui/` — Leptos components and SVG; `style.css` — styling.
 - `tests/model_contract.rs` — integration tests; source files also contain unit tests.
 - `Cargo.toml`, `Cargo.lock`, `Trunk.toml` — dependencies and build configuration. Requires Rust 1.89 or newer, the `wasm32-unknown-unknown` target, and Trunk; see the local `README.md`.

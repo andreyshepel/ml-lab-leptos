@@ -1,3 +1,4 @@
+mod cartpole;
 mod clustering;
 mod controls;
 mod plots;
@@ -73,7 +74,7 @@ pub fn App() -> impl IntoView {
         </nav>
         <div hidden=move || experiment.get()!=0><Regression/></div>
         <div hidden=move || experiment.get()!=1><clustering::Clustering/></div>
-        <div hidden=move || experiment.get()!=2><reinforcement::Reinforcement/></div>
+        <div hidden=move || experiment.get()!=2><reinforcement::Reinforcement active=Signal::derive(move || experiment.get()==2)/></div>
     }
 }
 

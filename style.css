@@ -26,6 +26,16 @@ nav button { overflow-wrap: anywhere; }
 .rl-inspector { margin-top: 24px; }
 .rl-cell { cursor: pointer; }
 .rl-cell:hover, .rl-cell:focus-visible { stroke: #edf3fa; stroke-width: 3px; }
-.rl-q-table { max-height: 330px; }
+.rl-q-table { position: relative; max-height: 330px; }
 .rl-q-table thead { position: sticky; top: 0; background: #172235; z-index: 1; }
 .rl-network { max-width: 780px; }
+
+.cartpole-card { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.cartpole-score { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.cartpole-observation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cartpole-observation dt { color: var(--muted); font-size: 12px; }
+.cartpole-observation dd { margin: 3px 0 0; font-variant-numeric: tabular-nums; }
+.cartpole-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cartpole-actions span { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-variant-numeric: tabular-nums; }
+.cartpole-actions .chosen { background: #22493f; border-color: var(--green); color: #b9ffe8; }
+.rl-inspector progress { width: min(100%, 420px); accent-color: var(--green); }
