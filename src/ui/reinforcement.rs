@@ -9,6 +9,8 @@ use ml_lab_leptos::reinforcement::{
     START, Tile, WIDTH, tile,
 };
 
+use super::{num, signed_num};
+
 const SEED: u32 = 72;
 const CELL: usize = 64;
 const BATCH_STEPS: usize = 96;
@@ -114,7 +116,7 @@ fn Maze(active: Signal<bool>) -> impl IntoView {
                 </div>
                 <div>
                     <label class="cluster-count">"Вероятность случайного хода ε "
-                        {move || format!("{:.0}%",100.0*epsilon.get())}
+                        {move || format!("{}%",num(100.0*epsilon.get()))}
                         <input type="range" min="0" max="1" step="0.05" prop:value=move || epsilon.get()
                             on:input=move |ev| {if let Ok(value)=event_target_value(&ev).parse(){run_to.set(None); epsilon.set(value);}}/>
                     </label>
@@ -171,7 +173,7 @@ fn Maze(active: Signal<bool>) -> impl IntoView {
                             <div class="legend">
                                 <span>{if preview.get(){"Оценки Q на старте"}else{"Оценки Q в текущей клетке"}}</span>
                                 {model.values(cell, collected).into_iter().zip(ARROWS).map(|(v,arrow)|view!{
-                                    <span>{format!("{arrow} {v:.2}")}</span>
+                                    <span>{format!("{arrow} {}",num(v))}</span>
                                 }).collect_view()}
                             </div>
                         })
@@ -240,15 +242,15 @@ fn status(model: &Experiment, preview: bool) -> String {
         .last_action
         .zip(model.last_reward)
         .map_or_else(String::new, |(a, r)| {
-            format!(" Последний ход {} ({r:+.2}).", ARROWS[a])
+            format!(" Последний ход {} ({}).", ARROWS[a], signed_num(r))
         });
     format!(
-        "Эпизодов завершено: {}. Ходов: {}. Собрано {}/{}. Награда: {:+.2}.{action}{result}",
+        "Эпизодов завершено: {}. Ходов: {}. Собрано {}/{}. Награда: {}.{action}{result}",
         model.completed,
         model.steps,
         model.collected.count(),
         GOAL_COUNT,
-        model.reward
+        signed_num(model.reward)
     )
 }
 
@@ -350,7 +352,7 @@ fn history(episodes: &[Episode]) -> impl IntoView + use<> {
             {episodes.iter().enumerate().map(|(i,e)|{
                 let (x,y)=position(i,e.reward);
                 let color = if e.collected == GOAL_COUNT { "#6ce0c3" } else { "#fa8197" };
-                view!{<circle cx=x cy=y r="3" fill=color><title>{format!("Награда {:+.2}, {} ходов, собрано {}/{}",e.reward,e.steps,e.collected,GOAL_COUNT)}</title></circle>}
+                view!{<circle cx=x cy=y r="3" fill=color><title>{format!("Награда {}, {} ходов, собрано {}/{}",signed_num(e.reward),e.steps,e.collected,GOAL_COUNT)}</title></circle>}
             }).collect_view()}
         </svg>
         <p class="small">{format!("Последние {} завершённых эпизодов.", episodes.len())}</p>
@@ -425,7 +427,7 @@ fn q_table(
                                 </th>
                                 {scores.into_iter().enumerate().map(|(a,value)|view!{
                                     <td class:truth=!pending&&!tied&&a==best>
-                                        {if pending {"—".to_owned()} else {format!("{value:+.3}")}}
+                                        {if pending {"—".to_owned()} else {signed_num(value)}}
                                     </td>
                                 }).collect_view()}
                                 <td>{if pending {"Подбор меняет состояние"} else if tied {"Ничья"} else {ARROWS[best]}}</td>
@@ -460,7 +462,7 @@ fn network_diagram(net: NetworkView, values: [f64; 4], best: usize) -> impl Into
             {values.into_iter().enumerate().map(|(a,value)|view!{
                 <rect x="574" y=8+a*28 width="180" height="25" rx="5"
                     fill=if a==best {"#24493e"} else {"#233c59"}/>
-                <text x="592" y=26+a*28 fill="#edf3fa" font-size="15">{format!("{} {value:+.3}",ARROWS[a])}</text>
+                <text x="592" y=26+a*28 fill="#edf3fa" font-size="15">{format!("{} {}",ARROWS[a],signed_num(value))}</text>
             }).collect_view()}
         </svg>
         <p class="small">"Схема показывает слои целиком. Отдельные связи между слоями скрыты, но все участвуют в расчёте."</p>
@@ -478,13 +480,13 @@ fn network_diagram(net: NetworkView, values: [f64; 4], best: usize) -> impl Into
                     <tbody>
                         {(0..count).map(|i|view!{
                             <tr><th scope="row">{i+1}</th>
-                                <td>{format!("{:.3}",net.first[i])}</td>
-                                <td>{format!("{:.3}",net.second[i])}</td>
-                                {net.output_weights.iter().map(|w|view!{<td>{format!("{:+.3}",w[i])}</td>}).collect_view()}
+                                <td>{num(net.first[i])}</td>
+                                <td>{num(net.second[i])}</td>
+                                {net.output_weights.iter().map(|w|view!{<td>{signed_num(w[i])}</td>}).collect_view()}
                             </tr>
                         }).collect_view()}
                         <tr><th scope="row" colspan="3">"Смещение выхода"</th>
-                            {net.output_bias.into_iter().map(|v|view!{<td>{format!("{v:+.3}")}</td>}).collect_view()}
+                            {net.output_bias.into_iter().map(|v|view!{<td>{signed_num(v)}</td>}).collect_view()}
                         </tr>
                     </tbody>
                 </table>

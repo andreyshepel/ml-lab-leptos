@@ -5,7 +5,10 @@ use ml_lab_leptos::reinforcement::cartpole::{
     Action, DECISION_MS, Frame, NetworkConfig, Reward, TRACK_EDGE, Training,
 };
 
-use super::controls::{Slider, Toggle};
+use super::{
+    controls::{Slider, Toggle},
+    num, signed_num,
+};
 
 const DEMO_SEED: u32 = 9173;
 const TIMER_MS: u64 = 10;
@@ -127,10 +130,10 @@ pub(super) fn CartPole(active: Signal<bool>) -> impl IntoView {
                         "«Опустить шест» позволяет проверить восстановление с текущими весами."</p>
                     <p class="small rl-status">{move || {
                         let f = frame.get();
-                        let mean = f.mean_reward.map_or_else(|| "—".to_owned(), |x| format!("{x:+.2}"));
-                        let above = f.above_fraction.map_or_else(|| "—".to_owned(), |x| format!("{:.0}%", x * 100.0));
+                        let mean = f.mean_reward.map_or_else(|| "—".to_owned(), signed_num);
+                        let above = f.above_fraction.map_or_else(|| "—".to_owned(), |x| format!("{}%", num(x * 100.0)));
                         let epsilon = if learning.get() { run.with(Training::epsilon) } else { 0.0 };
-                        format!("Последние 10 с симуляции · средняя награда {mean} · выше горизонтали {above} · случайный ход {:.0}%", epsilon * 100.0)
+                        format!("Последние 10 с симуляции · средняя награда {mean} · выше горизонтали {above} · случайный ход {}%", num(epsilon * 100.0))
                     }}</p>
                     <p role="status" class="small" hidden=move || !failed.get()>
                         "Симуляция остановлена из-за численного сбоя. Можно начать с нуля."
@@ -141,7 +144,7 @@ pub(super) fn CartPole(active: Signal<bool>) -> impl IntoView {
             <details class="rl-inspector">
                 <summary>"Настройки нейросети DQN"</summary>
                 <p class="small">{move || format!("Текущая сеть: {} · Adam, шаг {} · L2 {}",
-                    architecture(applied.get()), applied.get().rate, applied.get().l2)}</p>
+                    architecture(applied.get()), num(applied.get().rate), num(applied.get().l2))}</p>
                 <Slider label="Скрытые слои" min=1.0 max=Signal::derive(|| NetworkConfig::MAX_DEPTH as f64)
                     step=1.0 value=Signal::derive(move || draft.get().depth as f64)
                     change=Callback::new(move |value| draft.update(|config| config.depth = value as usize))/>
@@ -160,7 +163,7 @@ pub(super) fn CartPole(active: Signal<bool>) -> impl IntoView {
                             }
                         }>
                         {NetworkConfig::RATES.into_iter().map(|value| view! {
-                            <option value=value.to_string()>{value.to_string()}</option>
+                            <option value=value.to_string()>{num(value)}</option>
                         }).collect_view()}
                     </select>
                 </label>
@@ -172,7 +175,7 @@ pub(super) fn CartPole(active: Signal<bool>) -> impl IntoView {
                             }
                         }>
                         {NetworkConfig::L2_OPTIONS.into_iter().map(|value| view! {
-                            <option value=value.to_string()>{value.to_string()}</option>
+                            <option value=value.to_string()>{num(value)}</option>
                         }).collect_view()}
                     </select>
                 </label>
@@ -238,19 +241,19 @@ fn Cart(frame: Signal<Frame>) -> impl IntoView {
                 } else if f.decision.is_none() {
                     format!("Шаг {} · шест опущен вручную", f.steps)
                 } else {
-                    format!("Шаг {} · награда {:+.2}", f.steps, f.reward)
+                    format!("Шаг {} · награда {}", f.steps, signed_num(f.reward))
                 }
             }}</p>
             <dl class="cartpole-observation">
-                <div><dt>"Положение"</dt><dd>{move || format!("{:+.2} м", frame.get().state.position)}</dd></div>
-                <div><dt>"Скорость"</dt><dd>{move || format!("{:+.2} м/с", frame.get().state.velocity)}</dd></div>
-                <div><dt>"Угол"</dt><dd>{move || format!("{:+.2}°", frame.get().state.angle.to_degrees())}</dd></div>
-                <div><dt>"Угловая скорость"</dt><dd>{move || format!("{:+.1} °/с", frame.get().state.angular_velocity.to_degrees())}</dd></div>
+                <div><dt>"Положение"</dt><dd>{move || format!("{} м", signed_num(frame.get().state.position))}</dd></div>
+                <div><dt>"Скорость"</dt><dd>{move || format!("{} м/с", signed_num(frame.get().state.velocity))}</dd></div>
+                <div><dt>"Угол"</dt><dd>{move || format!("{}°", signed_num(frame.get().state.angle.to_degrees()))}</dd></div>
+                <div><dt>"Угловая скорость"</dt><dd>{move || format!("{} °/с", signed_num(frame.get().state.angular_velocity.to_degrees()))}</dd></div>
             </dl>
             {move || frame.get().decision.map(|decision| view! {
                 <div class="cartpole-actions" aria-label="Оценки Q и действие на последнем шаге">
-                    <span class:chosen=decision.action == Action::Left>{format!("← Q {:.2}", decision.values[0])}</span>
-                    <span class:chosen=decision.action == Action::Right>{format!("Q {:.2} →", decision.values[1])}</span>
+                    <span class:chosen=decision.action == Action::Left>{format!("← Q {}", num(decision.values[0]))}</span>
+                    <span class:chosen=decision.action == Action::Right>{format!("Q {} →", num(decision.values[1]))}</span>
                     <span>{if decision.exploratory { "Случайный толчок" } else { "Выбор по Q" }}</span>
                 </div>
             })}

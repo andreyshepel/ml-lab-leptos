@@ -1,7 +1,7 @@
 use super::{Display, num, state::Lab};
 use leptos::prelude::*;
 use ml_lab_leptos::{
-    data::{grid, target},
+    data::{Point, grid, target},
     model::{Fit, Model},
 };
 
@@ -40,23 +40,48 @@ impl Axes {
             })
             .collect()
     }
-    fn grid(&self, log: bool) -> impl IntoView + use<> {
+    fn grid(&self) -> impl IntoView + use<> {
         (0..=4).map(|i|{
             let t=f64::from(i)/4.0;
             let value=self.max_y-(self.max_y-self.min_y)*t;
             let y=self.y(value);
             let x=self.min_x+(self.max_x-self.min_x)*t;
-            let label=if log {format!("{:.1e}",10_f64.powf(value))} else {num(value)};
             view! {
                 <line x1="64" x2="876" y1=y y2=y stroke="#2b3b52"/>
-                <text x="58" y=y+4.0 text-anchor="end" fill="#aabbd1" font-size="11">{label}</text>
+                <text x="58" y=y+4.0 text-anchor="end" fill="#aabbd1" font-size="11">{num(value)}</text>
                 <text x=self.x(x) y=self.height-12.0 text-anchor="middle" fill="#aabbd1" font-size="11">{num(x)}</text>
             }
         }).collect_view()
     }
 }
 
-pub fn main_plot(
+fn observation_bound(points: &[Point]) -> f64 {
+    points.iter().map(|p| p.y.abs() * 1.08).fold(1.6, f64::max)
+}
+
+pub(super) fn observations_plot(points: &[Point]) -> impl IntoView + use<> {
+    let bound = observation_bound(points);
+    let axes = Axes {
+        min_x: -3.0,
+        max_x: 3.0,
+        min_y: -bound,
+        max_y: bound,
+        height: 370.0,
+    };
+    let dots = points
+        .iter()
+        .map(|p| view! { <circle cx=axes.x(p.x) cy=axes.y(p.y) r="4.4" fill=TRAIN stroke=TRAIN/> })
+        .collect_view();
+    view! {
+        <svg class="plot" viewBox="0 0 900 370" role="img" aria-label="График исходных наблюдений">
+            <defs><clipPath id="regression-observations-area"><rect x="64" y="22" width="812" height="310"/></clipPath></defs>
+            {axes.grid()}
+            <g clip-path="url(#regression-observations-area)">{dots}</g>
+        </svg>
+    }
+}
+
+pub(super) fn regression_plot(
     lab: &Lab,
     fit: Option<&Fit>,
     display: Display,
@@ -79,9 +104,7 @@ pub fn main_plot(
         .unwrap_or_default();
     let mut bound = 1.6_f64;
     if display.autoscale {
-        for p in &lab.data.train {
-            bound = bound.max(p.y.abs() * 1.08);
-        }
+        bound = observation_bound(&lab.data.train);
         for &(_, y, sd) in &samples {
             bound = bound.max((y.abs() + 1.96 * sd.unwrap_or(0.0)) * 1.08);
         }
@@ -183,9 +206,9 @@ pub fn main_plot(
             .any(|(_, y, sd)| y.abs() + 1.96 * sd.unwrap_or(0.0) > bound);
     view! {
         <svg class="plot" viewBox="0 0 900 370" role="group" aria-label="Целевая функция, модель и обучающие точки">
-            <defs><clipPath id="plot-area"><rect x="64" y="22" width="812" height="310"/></clipPath></defs>
-            {shades}{a.grid(false)}
-            <g clip-path="url(#plot-area)">
+            <defs><clipPath id="regression-model-area"><rect x="64" y="22" width="812" height="310"/></clipPath></defs>
+            {shades}{a.grid()}
+            <g clip-path="url(#regression-model-area)">
                 {band.map(|d|view!{<path d=d fill="#72b7d4" opacity=".18"/>})}
                 {parts.into_iter().map(|d|view!{<path d=d fill="none" stroke=TRAIN opacity=".32"/>}).collect_view()}
                 {target_path.map(|d|view!{<path d=d fill="none" stroke=TARGET stroke-width="2.4"/>})}
@@ -242,9 +265,9 @@ pub fn diagnostic(
         None
     };
     view! {
-        <p class="small">{label}" · RMSE в логарифмическом масштабе"</p>
+        <p class="small">{label}" · по вертикали log₁₀(RMSE)"</p>
         <svg viewBox="0 0 900 230" role="img" aria-label="График ошибки">
-            {a.grid(true)}
+            {a.grid()}
             <path d=train fill="none" stroke=TRAIN stroke-width="2"/>
             {test_path.map(|d|view!{<path d=d fill="none" stroke=TEST stroke-width="2"/>})}
             {single.map(|(x,y,z)|view!{<circle cx=x cy=y r="4" fill=TRAIN/>{test.then(||view!{<circle cx=x cy=z r="4" fill=TEST/>})}})}

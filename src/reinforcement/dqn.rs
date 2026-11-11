@@ -18,8 +18,8 @@ const TARGET_INTERVAL: usize = 64;
 // Скрытый слой суммирует веса активной клетки и флагов собранных наград.
 #[derive(Clone)]
 struct Network {
-    input: [[f64; HIDDEN]; STATES + GOAL_COUNT],
-    hidden: [[f64; HIDDEN]; HIDDEN],
+    input: Vec<[f64; HIDDEN]>,
+    hidden: Vec<[f64; HIDDEN]>,
     hidden_bias: [f64; HIDDEN],
     output: [[f64; HIDDEN]; ACTIONS],
     bias: [f64; ACTIONS],
@@ -28,10 +28,16 @@ struct Network {
 impl Network {
     fn new(rng: &mut Random) -> Self {
         Self {
-            input: std::array::from_fn(|_| std::array::from_fn(|_| 0.8 * rng.sample() - 0.4)),
-            hidden: std::array::from_fn(|_| {
-                std::array::from_fn(|_| (2.0 * rng.sample() - 1.0) * (6.0 / HIDDEN as f64).sqrt())
-            }),
+            input: (0..STATES + GOAL_COUNT)
+                .map(|_| std::array::from_fn(|_| 0.8 * rng.sample() - 0.4))
+                .collect(),
+            hidden: (0..HIDDEN)
+                .map(|_| {
+                    std::array::from_fn(|_| {
+                        (2.0 * rng.sample() - 1.0) * (6.0 / HIDDEN as f64).sqrt()
+                    })
+                })
+                .collect(),
             hidden_bias: [0.0; HIDDEN],
             output: std::array::from_fn(|_| std::array::from_fn(|_| 0.24 * rng.sample() - 0.12)),
             bias: [0.0; ACTIONS],
@@ -115,8 +121,8 @@ impl DeepQ {
             return;
         }
         let mut grad = Network {
-            input: [[0.0; HIDDEN]; STATES + GOAL_COUNT],
-            hidden: [[0.0; HIDDEN]; HIDDEN],
+            input: vec![[0.0; HIDDEN]; STATES + GOAL_COUNT],
+            hidden: vec![[0.0; HIDDEN]; HIDDEN],
             hidden_bias: [0.0; HIDDEN],
             output: [[0.0; HIDDEN]; ACTIONS],
             bias: [0.0; ACTIONS],

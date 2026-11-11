@@ -40,13 +40,7 @@ pub fn DataControls(lab: RwSignal<Lab>, run_to: RwSignal<Option<u32>>) -> impl I
         });
     };
     view! {
-        <details class="controls" open><summary class="eyebrow">"Общие данные"</summary>
-            <Toggle label="Учитывать известный период T = 2"
-                checked=Signal::derive(move||lab.with(|s|s.periodic))
-                change=Callback::new(move|checked|{run_to.set(None);lab.update(|s|{s.periodic=checked;s.refit_all();});})/>
-            <p class="small">{move||lab.with(|s|if s.periodic{
-                format!("Обучение по фазе: {} уникальных фаз из {} наблюдений.",s.training.len(),s.used_count())
-            }else{"Обычный режим. Модель получает исходную координату x.".to_owned()})}</p>
+        <details class="controls"><summary class="eyebrow">"Настройки"</summary>
             <Slider label="Обучающие точки" min=8.0 max=Signal::derive(||200.0) step=1.0
                 value=Signal::derive(move||lab.with(|s|s.data_config.count as f64))
                 change=Callback::new(move|v|regenerate(|s,v|{s.count=v as usize;s.outlier_count=s.outlier_count.min(s.count/3);},v))/>
@@ -63,10 +57,6 @@ pub fn DataControls(lab: RwSignal<Lab>, run_to: RwSignal<Option<u32>>) -> impl I
                     value=Signal::derive(move||lab.with(|s|s.data_config.strength))
                     change=Callback::new(move|v|regenerate(|s,v|s.strength=v,v))/>
             </div>
-            <Toggle label="Исключить выбросы из обучения" checked=Signal::derive(move||lab.with(|s|s.exclude))
-                change=Callback::new(move|v|{run_to.set(None);lab.update(|s|{s.exclude=v;s.refit_all();});})/>
-            <p class="small">"Клик по обучающей точке ставит или снимает метку выброса."</p>
-            <p class="small" role="status">{move||lab.with(|s|format!("Помечено: {}. В обучении: {} из {}.",s.marked.len(),s.used_count(),s.data.train.len()))}</p>
             <label for="data-seed">"Seed набора данных"</label>
             <div class="inline">
                 <input id="data-seed" type="number" min="0" max="4294967295" step="1"
@@ -90,7 +80,7 @@ pub fn DisplayControls(display: RwSignal<Display>) -> impl IntoView {
         };
     }
     view! {
-        <details class="controls" open><summary class="eyebrow">"Отображение"</summary>
+        <details class="controls"><summary class="eyebrow">"Отображение"</summary>
             {toggle!("Показывать целевую функцию",target)}
             {toggle!("Показывать обученную модель",model)}
             {toggle!("Тестовые точки (200)",test_points)}
@@ -112,6 +102,18 @@ pub fn ModelControls(
     view! {
         <details class="controls" open><summary class="eyebrow">"Настройки модели"</summary>
             {move||model_fields(lab,active.get(),run_to)}
+        </details>
+        <details class="controls"><summary class="eyebrow">"Подготовка к обучению"</summary>
+            <Toggle label="Учитывать известный период T = 2"
+                checked=Signal::derive(move||lab.with(|s|s.periodic))
+                change=Callback::new(move|checked|{run_to.set(None);lab.update(|s|{s.periodic=checked;s.refit_all();});})/>
+            <p class="small">{move||lab.with(|s|if s.periodic{
+                format!("Обучение по фазе: {} уникальных фаз из {} наблюдений.",s.training.len(),s.used_count())
+            }else{"Обычный режим. Модель получает исходную координату x.".to_owned()})}</p>
+            <Toggle label="Исключить выбросы из обучения" checked=Signal::derive(move||lab.with(|s|s.exclude))
+                change=Callback::new(move|v|{run_to.set(None);lab.update(|s|{s.exclude=v;s.refit_all();});})/>
+            <p class="small">"Нажатие на точку на графике ставит или снимает метку выброса."</p>
+            <p class="small" role="status">{move||lab.with(|s|format!("Помечено: {}. В обучении: {} из {}.",s.marked.len(),s.used_count(),s.data.train.len()))}</p>
         </details>
     }
 }
@@ -142,7 +144,7 @@ fn model_fields(
                 <label>{$label}
                     <select prop:value=move||if let Parameters::$variant{$field,..}=read(){$field.to_string()}else{String::new()}
                         on:change=move|ev|{if let Ok(v)=event_target_value(&ev).parse(){change(|p,v|{if let Parameters::$variant{$field,..}=p{*$field=v;}},v);}}>
-                        {$options.iter().map(|&v|view!{<option value=v.to_string()>{v.to_string()}</option>}).collect_view()}
+                        {$options.iter().map(|&v|view!{<option value=v.to_string()>{num(v)}</option>}).collect_view()}
                     </select>
                 </label>
             }

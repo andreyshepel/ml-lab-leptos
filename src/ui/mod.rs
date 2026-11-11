@@ -32,7 +32,7 @@ impl Default for Display {
     fn default() -> Self {
         Self {
             target: false,
-            model: false,
+            model: true,
             test_points: false,
             compare_test: false,
             compare_target: false,
@@ -47,19 +47,20 @@ pub fn num(x: f64) -> String {
     if !x.is_finite() {
         return "—".to_owned();
     }
-    if x.abs() < 1e-9 {
-        return "≈ 0".to_owned();
+    let value = format!("{x:.4}");
+    match value.trim_end_matches('0').trim_end_matches('.') {
+        "0" | "-0" if x == 0.0 => "0".to_owned(),
+        "0" | "-0" => "≈ 0".to_owned(),
+        rounded => rounded.replace('.', ","),
     }
-    if x.abs() >= 1e4 || x.abs() < 1e-4 {
-        return format!("{x:.4e}");
+}
+
+fn signed_num(x: f64) -> String {
+    let mut value = num(x);
+    if x > 0.0 && value.starts_with(|c: char| c.is_ascii_digit()) {
+        value.insert(0, '+');
     }
-    let decimals = (4 - x.abs().log10().floor() as i32).max(0) as usize;
-    let value = format!("{x:.decimals$}");
-    if decimals == 0 {
-        value
-    } else {
-        value.trim_end_matches('0').trim_end_matches('.').to_owned()
-    }
+    value
 }
 
 #[component]
@@ -81,6 +82,7 @@ pub fn App() -> impl IntoView {
 #[component]
 fn Regression() -> impl IntoView {
     let lab = RwSignal::new(Lab::new());
+    let show_data = RwSignal::new(true);
     let selected = RwSignal::new(Method::Polynomial);
     let active = Memo::new(move |_| selected.get());
     let display = RwSignal::new(Display::default());
@@ -162,20 +164,31 @@ fn Regression() -> impl IntoView {
         .collect();
     view! {
         <header><div class="eyebrow">"ML LAB / 01—07"</div><h1>"Одна целевая функция."<br/><span>"Семь способов её приблизить."</span></h1></header>
-        <nav aria-label="Методы обучения">
+        <nav class="regression-nav" aria-label="Разделы регрессии">
+            <button aria-pressed=move||show_data.get().to_string()
+                on:click=move|_|show_data.set(true)>"Данные"</button>
+            <button aria-pressed=move||(!show_data.get()).to_string()
+                on:click=move|_|show_data.set(false)>"Приближение"</button>
+        </nav>
+        <main hidden=move||!show_data.get()>
+            <aside><DataControls lab=lab run_to=run_to/></aside>
+            <div class="workspace">
+                <Observations lab=lab/>
+            </div>
+        </main>
+        <nav class="regression-methods" aria-label="Методы обучения" hidden=move||show_data.get()>
             {Method::ALL.into_iter().map(|method|view!{
                 <button aria-pressed=move||(active.get()==method).to_string() on:click=move|_|select(method)>{method.tab()}</button>
             }).collect_view()}
         </nav>
-        <main>
+        <main hidden=move||show_data.get()>
             <aside>
-                <DataControls lab=lab run_to=run_to/>
                 <ModelControls lab=lab active=active run_to=run_to/>
                 <DisplayControls display=display/>
             </aside>
             <div class="workspace">
-                <section class="panel">
-                    <div class="method-header"><div><div class="eyebrow">"Модель"</div><h2>{move||active.get().title()}</h2></div></div>
+                <details class="panel regression-panel" open>
+                    <summary><h2><span class="eyebrow">"Модель"</span>{move||active.get().title()}</h2></summary>
                     <p>{move||description(active.get())}</p>
                     <div class="presets">
                         {["Простая модель","Рабочий пример","Высокая гибкость"].into_iter().enumerate().map(|(i,label)|view!{
@@ -196,7 +209,7 @@ fn Regression() -> impl IntoView {
                         let mode=display.get();
                         let method=active.get();
                         let x=probe.get();
-                        lab.with(|s|plots::main_plot(s,s.models[index(method)].as_ref().ok(),mode,x,mark))
+                        lab.with(|s|plots::regression_plot(s,s.models[index(method)].as_ref().ok(),mode,x,mark))
                     }}
                     <p class="warning" role="status" hidden=move||lab.with(|s|s.warning.is_none()&&s.models[index(active.get())].is_ok())>
                         {move||lab.with(|s|s.warning.or_else(||s.models[index(active.get())].as_ref().err().copied()))}
@@ -218,9 +231,9 @@ fn Regression() -> impl IntoView {
                             view!{<p class="note">{format!("RMSE вне обучения: {} · целевая функция на [−9, −3] и [3, 9].",num(value))}</p>}
                         })
                     }))}
-                </section>
-                <section class="panel">
-                    <div class="eyebrow">"Внутри модели"</div><h2>"Как получается предсказание"</h2>
+                </details>
+                <details class="panel regression-panel" open>
+                    <summary><h2>"Как получается предсказание"</h2></summary>
                     <Slider label="Проверочная точка x" min=-5.0 max=Signal::derive(||5.0) step=0.05
                         value=probe.into() change=Callback::new(move|x|{probe.set(x);stage.set(None);})/>
                     <p class="small">{move||lab.with(|s|s.models[index(active.get())].as_ref().ok().map(|fit|{
@@ -242,13 +255,13 @@ fn Regression() -> impl IntoView {
                         let x=probe.get();let stage=stage.get();let method=active.get();
                         lab.with(|s|s.models[index(method)].as_ref().ok().map(|fit|structure::structure(fit,x,stage)))
                     }}
-                </section>
-                <section class="panel">
-                    <h2>{move||if active.get()==Method::Neural{"Как меняется ошибка во время обучения"}else{"Как настройка влияет на ошибку"}}</h2>
+                </details>
+                <details class="panel regression-panel" open>
+                    <summary><h2>{move||if active.get()==Method::Neural{"Как меняется ошибка во время обучения"}else{"Как настройка влияет на ошибку"}}</h2></summary>
                     {move||diagnostic.with(|(label,points)|plots::diagnostic(label,points,display.with(|d|d.compare_test)))}
-                </section>
-                <section class="panel">
-                    <div class="eyebrow">"Как получается предсказание"</div><h2>"Формула и параметры"</h2>
+                </details>
+                <details class="panel regression-panel" open>
+                    <summary><h2>"Формула и параметры"</h2></summary>
                     <p class="formula">{move||structure::formula(active.get())}</p>
                     <details node_ref=coefficients on:toggle=move|_|{
                         coefficients_open.set(coefficients.get_untracked().is_some_and(|element|element.open()));
@@ -260,9 +273,9 @@ fn Regression() -> impl IntoView {
                             </table></div>
                         }))}
                     </details>
-                </section>
-                <section class="panel">
-                    <h2>"Сравнение на общих данных"</h2>
+                </details>
+                <details class="panel regression-panel" open>
+                    <summary><h2>"Сравнение на общих данных"</h2></summary>
                     <div class="table-wrap"><table>
                         <thead><tr><th>"Метод"</th><th>"RMSE обучение"</th>
                             <th hidden=move||!display.with(|d|d.compare_test)>"RMSE тест"</th>
@@ -279,10 +292,47 @@ fn Regression() -> impl IntoView {
                             </tr>
                         }).collect_view()}</tbody>
                     </table></div>
-                </section>
+                </details>
             </div>
         </main>
-        <footer>"RMSE измеряет среднюю величину ошибки. Тестовые точки используются только для оценки."</footer>
+        <footer hidden=move||show_data.get()>"RMSE измеряет среднюю величину ошибки. Тестовые точки используются только для оценки."</footer>
+    }
+}
+
+#[component]
+fn Observations(lab: RwSignal<Lab>) -> impl IntoView {
+    let config = Memo::new(move |_| lab.with(|s| s.data_config));
+    let points = Memo::new(move |_| config.with(|_| lab.with_untracked(|s| s.data.train.clone())));
+    view! {
+        <details class="panel regression-panel" open>
+            <summary><h2>"Исходные данные"</h2></summary>
+            <p class="small">"По этим наблюдениям модель приближает зависимость y от x."</p>
+            <div class="table-wrap observations-table">
+                <table aria-label="Обучающие наблюдения">
+                    <thead><tr>
+                        <th scope="col">"№"</th>
+                        <th scope="col">"x"</th>
+                        <th scope="col">"Наблюдаемое y"</th>
+                    </tr></thead>
+                    <tbody>
+                        <For each=move||points.get().into_iter().enumerate()
+                            key=|(i,p)|(*i,p.x.to_bits(),p.y.to_bits())
+                            children=|(i,p)|view!{
+                                <tr>
+                                    <th scope="row">{i+1}</th>
+                                    <td>{num(p.x)}</td>
+                                    <td>{num(p.y)}</td>
+                                </tr>
+                            }
+                        />
+                    </tbody>
+                </table>
+            </div>
+        </details>
+        <details class="panel regression-panel">
+            <summary><h2>"График"</h2></summary>
+            {move||points.with(|points|plots::observations_plot(points))}
+        </details>
     }
 }
 

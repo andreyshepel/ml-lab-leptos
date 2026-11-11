@@ -4,6 +4,8 @@ use ml_lab_leptos::{
     data::Point,
 };
 
+use super::num;
+
 const COLORS: [&str; 5] = ["#8faaff", "#ffbc7b", "#6ce0c3", "#de9aef", "#fa8197"];
 
 #[component]
@@ -87,7 +89,7 @@ fn Centroid(seed: RwSignal<u32>) -> impl IntoView {
             </svg>
             <div class="legend"><span>"● Наблюдение"</span><span>"+ Центр кластера"</span>
                 <span>{move || model.with(|m| format!("Итераций: {}", m.iterations))}</span>
-                {move || model.with(|m| m.squared_error().map(|v| format!("Сумма квадратов расстояний: {v:.2}")))}
+                {move || model.with(|m| m.squared_error().map(|v| format!("Сумма квадратов расстояний: {}",num(v))))}
             </div>
         </section>
     }
@@ -146,7 +148,7 @@ fn OtherMethod(density: bool, seed: RwSignal<u32>) -> impl IntoView {
             }}</p>
             <div class="neural-actions">
                 {if density {view!{
-                    <label class="cluster-count">"Радиус ε " {move || format!("{:.2}",epsilon.get())}
+                    <label class="cluster-count">"Радиус ε " {move || num(epsilon.get())}
                         <input type="range" min="0.10" max="1.50" step="0.02" prop:value=move || epsilon.get()
                             on:input=move |ev|{if let Ok(v)=event_target_value(&ev).parse(){epsilon.set(v);}}/>
                     </label>
